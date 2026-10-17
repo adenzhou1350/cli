@@ -45,7 +45,7 @@ export default defineCommand({
       const response = await requestJson<VideoV2TaskResponse>(config, { url });
       const task = response.task;
 
-      if (config.quiet) {
+      if (config.quiet && format === 'text') {
         console.log(task.status);
         return;
       }
@@ -66,7 +66,7 @@ export default defineCommand({
     const url = videoTaskEndpoint(config.baseUrl, taskId);
     const response = await requestJson<VideoTaskResponse>(config, { url });
 
-    if (config.quiet) {
+    if (config.quiet && format === 'text') {
       console.log(response.status);
       return;
     }

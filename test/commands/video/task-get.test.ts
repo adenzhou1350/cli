@@ -44,7 +44,7 @@ describe('video task get command', () => {
     ).rejects.toThrow('--task-id is required');
   });
 
-  it('queries task status', async () => {
+  it.each([false, true])('queries task status as JSON with quiet=%s', async (quiet) => {
     server = createMockServer({
       routes: {
         '/v1/query/video_generation': () => jsonResponse(videoTaskSuccess),
@@ -58,7 +58,7 @@ describe('video task get command', () => {
       output: 'json' as const,
       timeout: 10,
       verbose: false,
-      quiet: false,
+      quiet,
       noColor: true,
       yes: false,
       dryRun: false,
@@ -73,7 +73,7 @@ describe('video task get command', () => {
     try {
       await taskGetCommand.execute(config, {
         taskId: '106916112212032',
-        quiet: false,
+        quiet,
         verbose: false,
         noColor: true,
         yes: false,
@@ -84,14 +84,19 @@ describe('video task get command', () => {
       });
 
       const parsed = JSON.parse(output);
-      expect(parsed.status).toBe('Success');
-      expect(parsed.file_id).toBe('176844028768320');
+      expect(parsed).toEqual({
+        task_id: videoTaskSuccess.task_id,
+        status: videoTaskSuccess.status,
+        file_id: videoTaskSuccess.file_id,
+        video_width: videoTaskSuccess.video_width,
+        video_height: videoTaskSuccess.video_height,
+      });
     } finally {
       console.log = originalLog;
     }
   });
 
-  it('queries MiniMax-H3 task status from the V2 endpoint', async () => {
+  it.each([false, true])('queries MiniMax-H3 task status as JSON with quiet=%s', async (quiet) => {
     server = createMockServer({
       routes: {
         '/v2/query/video_generation/h3-123': () => jsonResponse({
@@ -115,7 +120,7 @@ describe('video task get command', () => {
       output: 'json' as const,
       timeout: 10,
       verbose: false,
-      quiet: false,
+      quiet,
       noColor: true,
       yes: false,
       dryRun: false,
@@ -131,7 +136,7 @@ describe('video task get command', () => {
       await taskGetCommand.execute(config, {
         taskId: 'h3-123',
         model: 'MiniMax-H3',
-        quiet: false,
+        quiet,
         verbose: false,
         noColor: true,
         yes: false,
@@ -142,8 +147,55 @@ describe('video task get command', () => {
       });
 
       const parsed = JSON.parse(output);
-      expect(parsed.status).toBe('succeeded');
-      expect(parsed.url).toBe('https://example.com/video.mp4');
+      expect(parsed).toEqual({
+        task_id: 'h3-123',
+        model: 'MiniMax-H3',
+        status: 'succeeded',
+        url: 'https://example.com/video.mp4',
+        resolution: '2K',
+        duration: 5,
+        ratio: '16:9',
+      });
+    } finally {
+      console.log = originalLog;
+    }
+  });
+
+  it.each([false, true])('keeps status-only quiet text output with H3=%s', async (usesV2) => {
+    const status = usesV2 ? 'succeeded' : 'Success';
+    server = createMockServer({
+      routes: {
+        '/v1/query/video_generation': () => jsonResponse(videoTaskSuccess),
+        '/v2/query/video_generation/h3-123': () => jsonResponse({
+          task: { id: 'h3-123', model: 'MiniMax-H3', status },
+        }),
+      },
+    });
+    const config = {
+      apiKey: 'test-key',
+      region: 'global' as const,
+      baseUrl: server.url,
+      output: 'text' as const,
+      timeout: 10,
+      verbose: false,
+      quiet: true,
+      noColor: true,
+      yes: false,
+      dryRun: false,
+      nonInteractive: true,
+      async: false,
+    };
+    const originalLog = console.log;
+    const output: unknown[] = [];
+    console.log = (msg: unknown) => { output.push(msg); };
+    try {
+      await taskGetCommand.execute(config, {
+        ...config,
+        help: false,
+        taskId: usesV2 ? 'h3-123' : videoTaskSuccess.task_id,
+        ...(usesV2 ? { model: 'MiniMax-H3' } : {}),
+      });
+      expect(output).toEqual([status]);
     } finally {
       console.log = originalLog;
     }
